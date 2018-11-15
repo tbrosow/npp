@@ -1,8 +1,61 @@
 var NPPAjax = Class.create();
 NPPAjax.prototype = Object.extendsObject(global.AbstractAjaxProcessor, {
 
+    calcPaymentAge: function(retObj) {
+		retObj.log = {};
+		
+        gs.info("calcPaymentAge:"+ JSON.stringify(retObj, null, 4));
+        var caseRec = new GlideRecord("x_baoq_npp_nppcase");
+        if (caseRec.get(retObj.id)) {
+            retObj.syscr = "" + caseRec.sys_created_on;
+			retObj.log.openedDate = "" + caseRec.sys_created_on;
+        }
+
+		var openedDate = new GlideDateTime(caseRec.sys_created_on);
+		retObj.openedDate = openedDate.getNumericValue() / (1000 * 24 * 3600);
+
+		var originalDate = new GlideDateTime("2011-01-01 12:00:00");
+		originalDate.setValueUTC(retObj.original_creation_date, retObj.date_format);
+		retObj.log.originalDate = originalDate.getValue();
+		
+        retObj.paymentDays = originalDate.getNumericValue() / (1000 * 24 * 3600);
+
+		var sevenMonthDate = new GlideDateTime("2011-01-01 12:00:00");
+		sevenMonthDate.setValueUTC(retObj.original_creation_date, retObj.date_format);
+		sevenMonthDate.addMonthsUTC(7);
+		retObj.log.test7Mon = sevenMonthDate.getValue();
+        retObj.paymentAge7Month = sevenMonthDate.getNumericValue() / (1000 * 24 * 3600);
+
+        var sevenDaysDate = new GlideDateTime("2011-01-01 12:00:00");
+		sevenDaysDate.setValueUTC(retObj.original_creation_date, retObj.date_format);
+        sevenDaysDate.addDaysUTC(7);
+        retObj.paymentAge7Days = sevenDaysDate.getNumericValue() / (1000 * 24 * 3600);
+		retObj.log.test7Days = sevenDaysDate.getValue();
+	
+		retObj.delta = retObj.openedDate - retObj.paymentDays;
+
+        if ((retObj.openedDate - retObj.paymentDays) < 7) {
+            gs.info("< 7 days");
+            retObj.payment_age = "Under 10 days";
+            retObj.cancellation_additional_info = "MPREPTPDPER1";
+
+        } else if ((retObj.openedDate - retObj.paymentDays) > (retObj.paymentAge7Month - retObj.paymentDays)) {
+            retObj.payment_age = "Over 7 months";
+            retObj.cancellation_additional_info = "MPREPTPDPER3";
+
+        } else {
+            retObj.payment_age = "Under 7 months";
+            retObj.cancellation_additional_info = "MPREPTPDPER2";
+        }
+        retObj.valid = true;
+        gs.info("calcPaymentAge" + JSON.stringify(retObj, null, 4));
+        return retObj;
+    },
+
     closeCase: function() {
-        var retObj = {valid:false};
+        var retObj = {
+            valid: false
+        };
         //retObj.original_creation_date = this.getParameter('sysparm_original_creation_date');
         retObj.id = this.getParameter('sysparm_id');
         retObj.state = this.getParameter('sysparm_state');
@@ -22,7 +75,9 @@ NPPAjax.prototype = Object.extendsObject(global.AbstractAjaxProcessor, {
     },
 
     reopenCase: function() {
-        var retObj = {valid:false};
+        var retObj = {
+            valid: false
+        };
         //retObj.original_creation_date = this.getParameter('sysparm_original_creation_date');
         retObj.id = this.getParameter('sysparm_id');
         // retObj.state = this.getParameter('sysparm_state');
@@ -41,7 +96,9 @@ NPPAjax.prototype = Object.extendsObject(global.AbstractAjaxProcessor, {
     },
 
     checkDuplicateCaseAjax: function() {
-        var retObj = {valid:false};
+        var retObj = {
+            valid: false
+        };
         retObj.original_transaction_id = this.getParameter('sysparm_original_transaction_id');
         retObj.npp_message = this.getParameter('sysparm_npp_message');
         retObj.id = this.getParameter('sysparm_id');
@@ -69,8 +126,8 @@ NPPAjax.prototype = Object.extendsObject(global.AbstractAjaxProcessor, {
 
     checkDuplicateCaseBR: function(current) {
         var retObj = {
-        	id: "" + current.sys_id,
-			original_creation_date: "" + current.original_creation_date,
+            id: "" + current.sys_id,
+            original_creation_date: "" + current.original_creation_date,
             original_transaction_id: "" + current.original_transaction_id,
             npp_message: "" + current.npp_message
         };
@@ -79,9 +136,12 @@ NPPAjax.prototype = Object.extendsObject(global.AbstractAjaxProcessor, {
     },
 
     calcPaymentAgeAjax: function() {
-        var retObj = {valid:false};
+        var retObj = {
+            valid: false
+        };
         retObj.original_creation_date = this.getParameter('sysparm_original_creation_date');
         retObj.id = this.getParameter('sysparm_id');
+        retObj.date_format = this.getParameter('sysparm_user_date_time_format');
 
         this.calcPaymentAge(retObj);
         return JSON.stringify(retObj);
@@ -90,7 +150,9 @@ NPPAjax.prototype = Object.extendsObject(global.AbstractAjaxProcessor, {
     calcPaymentAgeBR: function(current) {
         var retObj = {
             id: "" + current.sys_id,
-            original_creation_date: "" + current.original_creation_date
+            original_creation_date: "" + current.original_creation_date,
+			date_format: "yyyy-MM-dd HH:mm:ss"
+			
         };
         retObj = this.calcPaymentAge(retObj);
         if (current.cancellation_reason_code == "CUST") {
@@ -99,45 +161,10 @@ NPPAjax.prototype = Object.extendsObject(global.AbstractAjaxProcessor, {
         current.payment_age = retObj.payment_age;
     },
 
-    calcPaymentAge: function(retObj) {
-        gs.info("calcPaymentAge");
-        var caseRec = new GlideRecord("x_baoq_npp_nppcase");
-        if (caseRec.get(retObj.id)) {
-            retObj.syscr = "" + caseRec.sys_created_on;
-        }
-        //param from client script
-
-        var sevenMonth = new GlideDateTime(retObj.original_creation_date);
-        sevenMonth.addMonthsUTC(7);
-
-        var sevenDays = new GlideDateTime(retObj.original_creation_date);
-        sevenDays.addDaysUTC(10);
-
-        var openat = new GlideDateTime(retObj.syscr);
-        var durationDays = GlideDateTime.subtract(openat, sevenDays);
-        retObj.paymentAge7Days = durationDays.getNumericValue() / 1000;
-
-        var durationMonth = GlideDateTime.subtract(openat, sevenMonth);
-        retObj.paymentAge7Months = durationMonth.getNumericValue() / 1000;
-
-        retObj.bpaymentAge7Days = (retObj.paymentAge7Days > 0);
-        retObj.bpaymentAge7Months = (retObj.paymentAge7Months > 0);
-        retObj.payment_age = "Under 10 days";
-        retObj.cancellation_additional_info = "MPREPTPDPER1";
-        if (retObj.bpaymentAge7Months && !retObj.bpaymentAge7Days) {
-            retObj.payment_age = "Under 7 months";
-            retObj.cancellation_additional_info = "MPREPTPDPER2";
-        } else if (!retObj.bpaymentAge7Months && !retObj.bpaymentAge7Days) {
-            retObj.payment_age = "Over 7 months";
-            retObj.cancellation_additional_info = "MPREPTPDPER3";
-        }
-        retObj.valid = true;
-        gs.info("calcPaymentAge" + JSON.stringify(retObj));
-        return retObj;
-    },
-
     ofiComms: function() {
-        var retObj = {valid:true};
+        var retObj = {
+            valid: true
+        };
         retObj.name = "ofiComms";
         retObj.id = this.getParameter('sysparm_id');
         retObj.notes = this.getParameter('sysparm_notes');
@@ -158,7 +185,9 @@ NPPAjax.prototype = Object.extendsObject(global.AbstractAjaxProcessor, {
     },
 
     customerAuth: function() {
-        var retObj = {valid:true};
+        var retObj = {
+            valid: true
+        };
         retObj.name = "customerAuth";
         retObj.id = this.getParameter('sysparm_id');
         retObj.customer_authorisation = this.getParameter('sysparm_customer_authorisation');
@@ -179,7 +208,9 @@ NPPAjax.prototype = Object.extendsObject(global.AbstractAjaxProcessor, {
     },
 
     customerComms: function() {
-        var retObj = {valid:true};
+        var retObj = {
+            valid: true
+        };
         retObj.name = "customerComms";
         retObj.id = this.getParameter('sysparm_id');
         retObj.general_customer_notes = this.getParameter('sysparm_general_customer_notes');
@@ -199,8 +230,8 @@ NPPAjax.prototype = Object.extendsObject(global.AbstractAjaxProcessor, {
     },
 
     test2: function() {
-		gs.info("TEST")
+        gs.info("TEST")
     },
 
-	type: 'NPPAjax'
+    type: 'NPPAjax'
 });

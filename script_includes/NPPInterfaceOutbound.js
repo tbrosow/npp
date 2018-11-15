@@ -209,6 +209,45 @@ NPPInterfaceOutbound.prototype = Object.extendsObject(NPPInterface, {
             this.response.errorCode = 401;
             this.response.errorMessage = this.ERR_MESSAGE_401.replace(/\{\{query\}\}/, global.JSUtil.nil(queryString)?": No query provided":queryString);
         }
+
+         if (this.messageDefinitionRec.send_as == "xml") {
+
+            // XML Payload
+            try {
+                var doc = {Document: {}};
+                doc.Document = this.payload;
+
+                var xmlhelp = new global.XMLHelper();
+                var xmlStr = xmlhelp.toXMLStr(doc);
+                xmlStr = this.addXMLParameter("/Document", xmlStr);
+
+                // var xmlDoc = new global.XMLDocument(xmlStr);
+                //
+                // var node = xmlDoc.getNode("/Document");
+                // node.setAttribute("xmlns", "urn:iso:std:iso:20022:tech:xsd:camt.029.001.05");evaluateAnswer
+                // node.setAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
+                // node.setAttribute("xsi:schemaLocation", "urn:iso:std:iso:20022:tech:xsd:camt.029.001.05.xsd");
+                //
+                // gs.debug("xmldoc is: " + xmlDoc.toString());
+                // gs.debug("xmldoc is: " + xmlDoc.toIndentedString());
+
+                // var xmldoc = new XMLDocument2();
+                // xmldoc.parseXML(xmlStr);
+                // this._debug("XML" + xmldoc.toString());
+                //
+                // node = xmldoc.getNode("/Document/RsltnOfInvstgtn/RsltnRltdInf/IntrBkSttlmAmt");
+                // this._debug(node);
+                //
+                // node.setAttribute("Ccy","AUD");
+
+                xmlStr = this.executeScripts("alter_xml", {xml: xmlStr});
+                this.interfaceMsgRec.xml = xmlStr;
+            } catch (e) {
+                this.interfaceMsgRec.xml = e;
+            }
+            this.payload = xmlStr;
+        }
+
         this.interfaceMsgRec.update();
         return {payload: this.payload, response: this.response};
     }
